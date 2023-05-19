@@ -6,6 +6,7 @@ authors = ["myuan <zhengmy@ion.ac.cn>"]
 license = "LGPL"
 readme = "README.md"
 packages = [{include = "range_compression"}]
+repository = "https://github.com/myuanz/matrix-range-compression"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<=3.11"
