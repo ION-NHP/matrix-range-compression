@@ -1,0 +1,224 @@
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import numba as nb
+import numpy as np
+import polars as pl
+
+
+@dataclass
+class RangeCompressedMask:
+    w: int
+    h: int
+
+    encodings: np.ndarray
+    '表达区间用，shape: (n, 4)，[(start_x, end_x, value, row_index), ...]'
+
+    row_indexes: np.ndarray
+    '快速从 y 查找编码行，shape: (n, 2)，[(start_y, encoding_count), ...]'
+
+
+    def save(self, base_dir: Path):
+        base_dir.mkdir(exist_ok=True)
+        dfe = pl.from_numpy(self.encodings, schema=['start', 'end', 'v', 'row_index'])
+        dfe.write_parquet(base_dir / f'encodings.parquet')
+
+        dfer = pl.from_numpy(self.row_indexes, schema=['row_start_index', 'row_count'])
+        dfer.write_parquet(base_dir / f'row_indexes.parquet')
+
+        (base_dir / 'meta.json').write_text(json.dumps({
+            'w': self.w,
+            'h': self.h,
+            'datetime': datetime.now(),
+        }))
+
+    @staticmethod
+    def load(base_dir: Path, chip: str | None = None, no_row_index=True):
+        '''从文件夹中导入
+
+        base_dir: 文件夹路径
+        chip: 如果有 chip，那么会在 base_dir/chip 中寻找文件
+        no_row_index: 原始 encodings 是四列的，最后一列是 row_index，
+                      如果不需要 row_index，可以设置为 True，可以把更多数据放到缓存里
+        '''
+        if chip is not None:
+            base_dir = base_dir / chip
+
+        dfe = pl.read_parquet(base_dir / f'encodings.parquet')
+        encodings = dfe.to_numpy()[:, :3]
+        if no_row_index:
+            encodings = np.ascontiguousarray(encodings[:, :3])
+        dfer = pl.read_parquet(base_dir / f'row_indexes.parquet')
+        row_indexes = dfer.to_numpy()
+
+        meta = json.loads((base_dir / 'meta.json').read_text())
+        return RangeCompressedMask(
+            w=meta['w'],
+            h=meta['h'],
+            encodings=encodings,
+            row_indexes=row_indexes,
+        )
+
+    @staticmethod
+    def targets(base_dir: Path | None = None, chip: str | None = None):
+        base = [
+            'encodings.parquet',
+            'row_indexes.parquet',
+            'meta.json',
+        ]
+
+        if base_dir is not None:
+            if chip is not None:
+                base_dir = base_dir / chip
+            base = [base_dir / x for x in base]
+
+        return base
+
+    def find_index(
+        self, 
+        X: np.ndarray, Y: np.ndarray, 
+        binary_search=False
+    ):
+        if self.encodings.shape[1] == 4:
+            import warnings
+            warnings.warn(f'`row_indexes` has 4 columns.')
+        
+        args = (self.row_indexes, self.encodings, X, Y)
+        if binary_search:
+            return _find_index_binary(*args)
+        else:
+            return _find_index(*args)
+
+
+@nb.njit
+def _mask_encode(mask):
+    n_rows, n_cols = mask.shape
+
+    encodings = []
+    row_indexes = []
+
+    for row_index in nb.prange(n_rows):
+        row = mask[row_index, :]
+        last_i = 0
+        last_v = row[last_i]
+
+        start_len = len(encodings)
+
+        for i in range(1, n_cols):
+            v = row[i]
+            # print(f'[{row_index}] ({last_i}, {i}) {v=} {last_v=}')
+            if v != last_v:
+                if last_v != 0:
+                    encodings.append((last_i, i - 1, last_v, row_index))
+                    # print('append')
+                last_v = v
+                last_i = i
+
+        encodings.append((last_i, len(row) - 1, last_v, row_index))
+        # print('append')
+        row_indexes.append((start_len, len(encodings) - start_len))
+
+    encodings_np = np.array(encodings, dtype="int32")
+    row_indexes_np = np.array(row_indexes, dtype="int32")
+    # 直接在返回中转换为np.array，numba无法编译
+
+    return encodings_np, row_indexes_np
+
+def mask_encode(mask: np.ndarray):
+    '''把 mask 编码为区间压缩。'''
+
+    h, w = mask.shape
+    encodings_np, row_indexes_np = _mask_encode(mask)
+    return RangeCompressedMask(
+        w=w, h=h,
+        encodings=encodings_np,
+        row_indexes=row_indexes_np
+    )
+
+
+@nb.njit
+def find_encoding_in_row(row_encodings, col):
+    if len(row_encodings) == 1:
+        return 0
+
+    for start_index, stop_index, value in row_encodings:
+        if start_index <= col <= stop_index:
+            return value
+        elif start_index > col:
+            return 0
+
+
+@nb.njit
+def find_encoding_in_row_binary(row_encodings, col):
+    # 在细胞中，二分搜索不影响速度，在分区中，二分搜索拖慢 50%
+
+    if len(row_encodings) == 1:
+        return 0
+
+    encoding_index = len(row_encodings) // 2
+    upper_index = len(row_encodings)
+    lower_index = 0
+
+    while True:
+        start_index, stop_index, value = row_encodings[encoding_index]
+
+        if start_index <= col <= stop_index:
+            return value
+
+        if upper_index - lower_index < 1:
+            return 0
+
+        if start_index > col:
+            upper_index = encoding_index
+            encoding_index = (encoding_index + lower_index) // 2
+        else:
+            lower_index = encoding_index
+            encoding_index = (encoding_index + upper_index) // 2
+
+
+# TODO: `First-class function type feature is experimental` 不再警告时合并两函数
+@nb.njit(parallel=True)
+def _find_index(row_indexes, encodings_np, X, Y):
+    out = np.zeros(len(X), dtype="int32")
+    for i in nb.prange(len(X)):
+        x, y = X[i], Y[i]
+        row, col = y, x
+
+        start_index, length = row_indexes[row]
+        row_encoding = encodings_np[start_index : start_index + length, :3]
+        res = find_encoding_in_row(row_encoding, col)
+        out[i] = res
+    return out
+
+
+@nb.njit(parallel=True)
+def _find_index_binary(row_indexes, encodings_np, X, Y):
+    out = np.zeros(len(X), dtype="int32")
+    for i in nb.prange(len(X)):
+        x, y = X[i], Y[i]
+        row, col = y, x
+
+        start_index, length = row_indexes[row]
+        row_encoding = encodings_np[start_index : start_index + length, :3]
+        res = find_encoding_in_row(row_encoding, col)
+        out[i] = res
+    return out
+
+
+def find_index(
+    mask_encoding_result: RangeCompressedMask, 
+    X: np.ndarray, Y: np.ndarray, 
+    binary_search=False
+):
+    if mask_encoding_result.encodings.shape[1] == 4:
+        import warnings
+        warnings.warn(f'`row_indexes` has 4 columns.')
+    
+    args = (mask_encoding_result.row_indexes, mask_encoding_result.encodings, X, Y)
+    if binary_search:
+        return _find_index_binary(*args)
+    else:
+        return _find_index(*args)
+
