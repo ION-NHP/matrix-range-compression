@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from os import PathLike
 from pathlib import Path
 
 import numba as nb
@@ -20,22 +21,24 @@ class RangeCompressedMask:
     '快速从 y 查找编码行，shape: (n, 2)，[(start_y, encoding_count), ...]'
 
 
-    def save(self, base_dir: Path):
+    def save(self, base_dir: str | PathLike, compression='gzip'):
+        base_dir = Path(base_dir)
+
         base_dir.mkdir(exist_ok=True)
         dfe = pl.from_numpy(self.encodings, schema=['start', 'end', 'v', 'row_index'])
-        dfe.write_parquet(base_dir / f'encodings.parquet')
+        dfe.write_parquet(base_dir / f'encodings.parquet', compression=compression)
 
         dfer = pl.from_numpy(self.row_indexes, schema=['row_start_index', 'row_count'])
-        dfer.write_parquet(base_dir / f'row_indexes.parquet')
+        dfer.write_parquet(base_dir / f'row_indexes.parquet', compression=compression)
 
         (base_dir / 'meta.json').write_text(json.dumps({
             'w': self.w,
             'h': self.h,
             'datetime': datetime.now(),
-        }))
+        }, default=str))
 
     @staticmethod
-    def load(base_dir: Path, chip: str | None = None, no_row_index=True):
+    def load(base_dir: str | PathLike, chip: str | None = None, no_row_index=True):
         '''从文件夹中导入
 
         base_dir: 文件夹路径
@@ -43,6 +46,8 @@ class RangeCompressedMask:
         no_row_index: 原始 encodings 是四列的，最后一列是 row_index，
                       如果不需要 row_index，可以设置为 True，可以把更多数据放到缓存里
         '''
+        base_dir = Path(base_dir)
+
         if chip is not None:
             base_dir = base_dir / chip
 
