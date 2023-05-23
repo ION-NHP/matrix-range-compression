@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from pathlib import Path
+from typing import Union, Optional
 
 import numba as nb
 import numpy as np
@@ -21,7 +22,7 @@ class RangeCompressedMask:
     '快速从 y 查找编码行，shape: (n, 2)，[(start_y, encoding_count), ...]'
 
 
-    def save(self, base_dir: str | PathLike, compression='gzip'):
+    def save(self, base_dir: Union[str, PathLike], compression='gzip'):
         base_dir = Path(base_dir)
 
         base_dir.mkdir(exist_ok=True)
@@ -38,7 +39,7 @@ class RangeCompressedMask:
         }, default=str))
 
     @staticmethod
-    def load(base_dir: str | PathLike, chip: str | None = None, no_row_index=True):
+    def load(base_dir: Union[str, PathLike], chip: Optional[str] = None, no_row_index=True):
         '''从文件夹中导入
 
         base_dir: 文件夹路径
@@ -67,7 +68,7 @@ class RangeCompressedMask:
         )
 
     @staticmethod
-    def targets(base_dir: Path | None = None, chip: str | None = None):
+    def targets(base_dir: Union[str, PathLike, None] = None, chip: Optional[str] = None):
         base = [
             'encodings.parquet',
             'row_indexes.parquet',
@@ -75,6 +76,7 @@ class RangeCompressedMask:
         ]
 
         if base_dir is not None:
+            base_dir = Path(base_dir)
             if chip is not None:
                 base_dir = base_dir / chip
             base = [base_dir / x for x in base]
