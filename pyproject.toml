@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "range-compression"
-version = "0.1.1"
+version = "0.2.0"
 description = ""
 authors = ["myuan <zhengmy@ion.ac.cn>"]
 license = "LGPL"
@@ -9,15 +9,17 @@ packages = [{include = "range_compression"}]
 repository = "https://github.com/myuanz/matrix-range-compression"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<=3.11"
+python = ">=3.8,<3.12"
 numba = "^0.57.0"
-numpy = "^1.24.3"
-polars = "^0.17.14"
+numpy = "^1.24"
+polars = "^0.17"
+importlib-metadata = { version = "^6.6.0", python = "^3.8" }
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.3.1"
 opencv-python-headless = "^4.7.0.72"
+tox = "^4.5.1"
 
 [build-system]
 requires = ["poetry-core"]
