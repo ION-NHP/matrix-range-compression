@@ -91,13 +91,16 @@ class RangeCompressedMask:
         if self.encodings.shape[1] == 4:
             import warnings
             warnings.warn(f'`row_indexes` has 4 columns.')
-        
+        if not isinstance(X, np.ndarray):
+            X = np.array(X)
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y)
+
         args = (self.row_indexes, self.encodings, X, Y)
         if binary_search:
             return _find_index_binary(*args)
         else:
             return _find_index(*args)
-
 
 @nb.njit
 def _mask_encode(mask):
@@ -222,10 +225,16 @@ def find_index(
     if mask_encoding_result.encodings.shape[1] == 4:
         import warnings
         warnings.warn(f'`row_indexes` has 4 columns.')
-    
+    if not isinstance(X, np.ndarray):
+        X = np.array(X)
+    if not isinstance(Y, np.ndarray):
+        Y = np.array(Y)
+
     args = (mask_encoding_result.row_indexes, mask_encoding_result.encodings, X, Y)
     if binary_search:
         return _find_index_binary(*args)
     else:
         return _find_index(*args)
 
+rcm_load = RangeCompressedMask.load
+rcm_find_index = RangeCompressedMask.find_index
