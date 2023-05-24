@@ -1,1 +1,1 @@
-from .range_compression import RangeCompressedMask, mask_encode, find_encoding_in_row
+from .range_compression import RangeCompressedMask, mask_encode, rcm_find_index, rcm_load
