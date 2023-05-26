@@ -150,7 +150,7 @@ def mask_encode(mask: np.ndarray):
 
 @nb.njit
 def find_encoding_in_row(row_encodings, col):
-    if len(row_encodings) == 1:
+    if len(row_encodings) == 1 and row_encodings[0, 0] == 0:
         return 0
 
     for start_index, stop_index, value in row_encodings:
@@ -164,7 +164,7 @@ def find_encoding_in_row(row_encodings, col):
 def find_encoding_in_row_binary(row_encodings, col):
     # 在细胞中，二分搜索不影响速度，在分区中，二分搜索拖慢 50%
 
-    if len(row_encodings) == 1:
+    if len(row_encodings) == 1 and row_encodings[0, 0] == 0:
         return 0
 
     encoding_index = len(row_encodings) // 2
@@ -216,25 +216,6 @@ def _find_index_binary(row_indexes, encodings_np, X, Y):
         out[i] = res
     return out
 
-
-def find_index(
-    mask_encoding_result: RangeCompressedMask, 
-    X: np.ndarray, Y: np.ndarray, 
-    binary_search=False
-):
-    if mask_encoding_result.encodings.shape[1] == 4:
-        import warnings
-        warnings.warn(f'`row_indexes` has 4 columns.')
-    if not isinstance(X, np.ndarray):
-        X = np.array(X)
-    if not isinstance(Y, np.ndarray):
-        Y = np.array(Y)
-
-    args = (mask_encoding_result.row_indexes, mask_encoding_result.encodings, X, Y)
-    if binary_search:
-        return _find_index_binary(*args)
-    else:
-        return _find_index(*args)
 
 rcm_load = RangeCompressedMask.load
 rcm_find_index = RangeCompressedMask.find_index
