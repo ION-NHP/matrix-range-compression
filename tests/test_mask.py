@@ -38,7 +38,15 @@ def test_mask():
     res = rcm.find_index(randx, randy)
     actual_res = image[randy, randx]
     
-    assert np.array_equal(res, actual_res)
+    try:
+        assert np.array_equal(res, actual_res)
+    except:
+        np.save('tests/image.npy', image)
+        np.save('tests/randx.npy', randx)
+        np.save('tests/randy.npy', randy)
+        np.save('tests/res.npy', res)
+        np.save('tests/actual_res.npy', actual_res)
+        raise
 
     rcm.save('tests/output')
     rcm2 = RangeCompressedMask.load('tests/output')
@@ -52,4 +60,5 @@ def test_mask():
     os.remove('tests/output/meta.json')
     os.rmdir('tests/output')
 
-    
+def test_benchmark(benchmark):
+    benchmark(test_mask)
