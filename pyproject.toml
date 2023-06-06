@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "range-compression"
-version = "0.2.3"
+version = "0.2.4"
 description = ""
 authors = ["myuan <zhengmy@ion.ac.cn>"]
 license = "LGPL"
@@ -12,7 +12,7 @@ repository = "https://github.com/myuanz/matrix-range-compression"
 python = ">=3.8,<3.12"
 numba = "^0.57.0"
 numpy = "^1.24"
-polars = "^0.17"
+polars = ">=0.17,<0.19"
 importlib-metadata = { version = "^6.6.0", python = "^3.8" }
 
 
