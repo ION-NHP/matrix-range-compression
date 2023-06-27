@@ -152,13 +152,19 @@ def mask_encode(mask: np.ndarray):
 def find_encoding_in_row(row_encodings, col):
     if len(row_encodings) == 1 and row_encodings[0, 0] == 0:
         return 0
+    if row_encodings[0][0] > col:
+        # 由于总是从小到大匹配的，先试试第一个，之后就不用在循环里判断是否 start_index > col 了
+        return 0
+    # if row_encodings[-1][1] < col:
+    #     # 但是不用判断最后一个，这种情况很少，也许会影响流水线
+    #     return 0
 
     for start_index, stop_index, value in row_encodings:
         if start_index <= col <= stop_index:
             return value
-        elif start_index > col:
-            return 0
 
+    # 这个 return 0 用于处理 col > row_encodings[-1][1] 的情况
+    return 0
 
 @nb.njit
 def find_encoding_in_row_binary(row_encodings, col):
