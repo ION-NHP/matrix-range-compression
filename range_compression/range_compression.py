@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Union, Optional
 
 import numba as nb
+from numba.typed.typeddict import Dict
 import numpy as np
 import polars as pl
-
+from polars import type_aliases as tap
 
 @dataclass
 class RangeCompressedMask:
@@ -22,7 +23,7 @@ class RangeCompressedMask:
     '快速从 y 查找编码行，shape: (n, 2)，[(start_y, encoding_count), ...]'
 
 
-    def save(self, base_dir: Union[str, PathLike], compression='gzip'):
+    def save(self, base_dir: Union[str, PathLike], compression: tap.ParquetCompression='gzip'):
         base_dir = Path(base_dir)
 
         base_dir.mkdir(exist_ok=True)
@@ -37,6 +38,12 @@ class RangeCompressedMask:
             'h': self.h,
             'datetime': datetime.now(),
         }, default=str))
+
+    def three_columns_encodings(self, try_contiguous=True):
+        res = self.encodings[:, :3]
+        if try_contiguous:
+            res = np.ascontiguousarray(res)
+        return res
 
     @staticmethod
     def load(base_dir: Union[str, PathLike], chip: Optional[str] = None, no_row_index=True):
@@ -101,6 +108,12 @@ class RangeCompressedMask:
             return _find_index_binary(*args)
         else:
             return _find_index(*args)
+
+    def to_mask(self):
+        return to_mask(self.three_columns_encodings(), self.row_indexes, self.w, self.h)
+
+    def calc_area(self):
+        return calc_area_from_encodings(self.encodings, self.row_indexes)
 
 @nb.njit
 def _mask_encode(mask):
@@ -222,6 +235,64 @@ def _find_index_binary(row_indexes, encodings_np, X, Y):
         out[i] = res
     return out
 
+
+@nb.njit(parallel=True)
+def to_mask(encodings: np.ndarray, row_indexes: np.ndarray, w: int, h: int):
+    assert encodings.shape[1] == 3, 'encodings should have 3 columns'
+
+    out = np.zeros((h, w), dtype="int32")
+    for row in nb.prange(h):
+        start_index, length = row_indexes[row]
+        row_encoding = encodings[start_index : start_index + length, :]
+        for start, stop, value in row_encoding:
+            out[row, start : stop + 1] = value
+    return out
+
+@nb.njit
+def calc_area_from_encodings(encodings: np.ndarray, row_indexes: np.ndarray):
+    '''计算每一个分块儿的面积'''
+    areas = {0: 0}
+
+    for i in range(len(row_indexes)):
+        start_index, length = row_indexes[i]
+        row_encoding = encodings[start_index : start_index + length, :3]
+        for start, stop, value in row_encoding:
+            if value == 0: continue
+            areas[value] = areas.get(value, 0) + (stop - start + 1)
+
+    return areas
+
+
+@nb.njit
+def calc_area_from_mask(mask: np.ndarray):
+    '''计算每一个分块儿的面积'''
+    areas = {0:{0:0}}
+
+    for i in range(nb.get_num_threads()):
+        _areas = {}
+        _areas[np.int64(0)] = np.int64(0)
+        areas[i] = _areas
+
+    for row in nb.prange(len(mask)):
+        areas_ = calc_area_from_mask_row(mask[row, :])
+        for col_v, cnt in areas_.items():
+            # print(type(col_v))
+            areas[nb.get_thread_id()][col_v] = areas[nb.get_thread_id()].get(col_v, 0) + cnt
+    areas_res = {0: 0}
+    for d in areas.values():
+        for col_v, cnt in d.items():
+            areas_res[col_v] = areas_res.get(col_v, 0) + cnt
+    return areas_res
+
+@nb.njit
+def calc_area_from_mask_row(row: np.ndarray):
+    areas = {}
+    areas[np.int64(0)] = np.int64(0)
+
+    for col_v in row:
+        if col_v == 0: continue
+        areas[col_v] = areas.get(col_v, 0) + 1
+    return areas
 
 rcm_load = RangeCompressedMask.load
 rcm_find_index = RangeCompressedMask.find_index

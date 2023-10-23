@@ -4,7 +4,8 @@ import os
 import cv2
 import numpy as np
 
-from range_compression import RangeCompressedMask, mask_encode
+from range_compression import RangeCompressedMask, mask_encode, calc_area_from_encodings
+from range_compression.range_compression import calc_area_from_mask
 
 def get_rand_image():
     width, height = 1024, 2048
@@ -24,7 +25,7 @@ def get_rand_image():
 
         pts = np.array(vertices, np.int32)
 
-        cv2.fillPoly(image, [pts], color)
+        cv2.fillPoly(image, [pts], (color, ))
     return image
 
 def _test_encode(image):
@@ -69,4 +70,16 @@ def test_mask(benchmark):
     os.remove('tests/output/row_indexes.parquet')
     os.remove('tests/output/meta.json')
     os.rmdir('tests/output')
+
+def test_area():
+    image = get_rand_image()
+    rcm = _test_encode(image)
+    res1 = calc_area_from_encodings(rcm.encodings, rcm.row_indexes)
+    res2 = calc_area_from_mask(image)
+    res3 = rcm.calc_area()
+    del res1[0]; del res2[0]; del res3[0]
+    print(res1)
+    assert res1 == res2 == res3
+    mask = rcm.to_mask()
+    assert np.all(image == mask)
 
