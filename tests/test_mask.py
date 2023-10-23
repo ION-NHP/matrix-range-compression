@@ -55,10 +55,10 @@ def test_mask(benchmark):
 
     rcm = _test_encode(image)
     randx, randy = get_randxy(width, height)
+    actual_res = _test_find_mask(rcm, image, randx, randy)
 
     benchmark.pedantic(_test_find_mask, args=(rcm, image, randx, randy), iterations=10, rounds=50)
     
-    actual_res = _test_find_mask(rcm, image, randx, randy)
     rcm.save('tests/output')
     rcm2 = RangeCompressedMask.load('tests/output')
     assert np.array_equal(rcm.encodings[:, :3], rcm2.encodings)
