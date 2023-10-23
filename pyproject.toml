@@ -10,9 +10,9 @@ repository = "https://github.com/myuanz/matrix-range-compression"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
-numba = "^0.57.1"
-numpy = "^1.24"
-polars = ">=0.18,<0.19"
+numba = ">=0.57.1,<1"
+numpy = ">=1.24,<2"
+polars = ">=0.18"
 importlib-metadata = { version = "^6.6.0", python = "^3.8" }
 
 
