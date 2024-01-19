@@ -22,3 +22,7 @@ assert (mtx[Y, X] == res).all()
 
 [ ] 把性能测试添加到测试和 readme 中，每个版本做性能回归测试  
 [ ] 添加更多说明和直接能运行的快速入门
+
+## Python3.12
+
+这个库严重依赖 numba：https://github.com/numba/numba/issues/9197
