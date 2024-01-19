@@ -3,13 +3,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from pathlib import Path
-from typing import Union, Optional
+from typing import Optional, Union
 
 import numba as nb
-from numba.typed.typeddict import Dict
 import numpy as np
 import polars as pl
 from polars import type_aliases as tap
+
 
 @dataclass
 class RangeCompressedMask:
