@@ -163,6 +163,7 @@ def mask_encode(mask: np.ndarray):
 
 @nb.njit
 def find_encoding_in_row(row_encodings, col):
+    '''如果要直接调用此函数，应当手动保证 col 不要在非法值域'''
     if len(row_encodings) == 1 and row_encodings[0, 0] == 0:
         return 0
     if row_encodings[0][0] > col:
@@ -215,9 +216,15 @@ def _find_index(row_indexes, encodings_np, X, Y):
         x, y = X[i], Y[i]
         row, col = y, x
 
-        start_index, length = row_indexes[row]
-        row_encoding = encodings_np[start_index : start_index + length, :3]
-        res = find_encoding_in_row(row_encoding, col)
+        res = 0
+        if x < 0 or y < 0:
+            pass
+        elif row >= len(row_indexes) or col >= encodings_np.shape[0]:
+            pass
+        else:
+            start_index, length = row_indexes[row]
+            row_encoding = encodings_np[start_index : start_index + length, :3]
+            res = find_encoding_in_row(row_encoding, col)
         out[i] = res
     return out
 
@@ -229,9 +236,15 @@ def _find_index_binary(row_indexes, encodings_np, X, Y):
         x, y = X[i], Y[i]
         row, col = y, x
 
-        start_index, length = row_indexes[row]
-        row_encoding = encodings_np[start_index : start_index + length, :3]
-        res = find_encoding_in_row(row_encoding, col)
+        res = 0
+        if x < 0 or y < 0:
+            pass
+        elif row >= len(row_indexes) or col >= encodings_np.shape[0]:
+            pass
+        else:
+            start_index, length = row_indexes[row]
+            row_encoding = encodings_np[start_index : start_index + length, :3]
+            res = find_encoding_in_row_binary(row_encoding, col)
         out[i] = res
     return out
 
