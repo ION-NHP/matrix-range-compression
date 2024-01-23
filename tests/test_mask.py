@@ -7,18 +7,21 @@ import numpy as np
 from range_compression import RangeCompressedMask, mask_encode, calc_area_from_encodings
 from range_compression.range_compression import calc_area_from_mask
 
+RND_IMG_W = 4096 + 1
+RND_IMG_H = 4096 - 1
+
 def get_rand_image():
-    width, height = 1024, 2048
+    width, height = RND_IMG_W, RND_IMG_H
     image = np.zeros((height, width), dtype=np.uint8)
 
-    num_polygons = 5 
+    num_polygons = 50
 
     for _ in range(num_polygons):
-        num_sides = random.randint(3, 8)
+        num_edges = random.randint(3, 8)
         color = random.randint(0, 255)
         vertices = []
 
-        for _ in range(num_sides):
+        for _ in range(num_edges):
             x = random.randint(0, width)
             y = random.randint(0, height)
             vertices.append((x, y))
@@ -56,6 +59,12 @@ def test_mask(benchmark):
     rcm = _test_encode(image)
     randx, randy = get_randxy(width, height)
     actual_res = _test_find_mask(rcm, image, randx, randy)
+
+    # test invalid rxry
+    for rx in (-2**32, -2**31, -RND_IMG_W-1, -RND_IMG_W, -1, RND_IMG_W, RND_IMG_W+1, RND_IMG_W*1000, 2**31, 2**32):
+        for ry in (-2**32, -2**31, -RND_IMG_H-1, -RND_IMG_H, -1, RND_IMG_H, RND_IMG_H+1, RND_IMG_H*1000, 2**31, 2**32):
+            print(rx, ry)
+            assert rcm.find_index(np.array([rx]), np.array([ry])) == 0
 
     benchmark.pedantic(_test_find_mask, args=(rcm, image, randx, randy), iterations=10, rounds=50)
     
