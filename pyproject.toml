@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "range-compression"
-version = "0.2.6"
+version = "0.4.0"
 description = ""
 authors = ["myuan <zhengmy@ion.ac.cn>"]
 license = "LGPL"
@@ -9,8 +9,14 @@ packages = [{include = "range_compression"}]
 repository = "https://github.com/myuanz/matrix-range-compression"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
-numba = ">=0.57.1,<1"
+python = ">=3.8,<3.13"
+
+# numba 0.59.0 is not compatible with python 3.8
+numba = [
+    { version = ">=0.54,<1", python = "^3.8" },
+    { version = ">=0.59,<1", python = ">=3.9" }
+]
+
 numpy = ">=1.24,<2"
 polars = ">=0.18"
 importlib-metadata = { version = "^6.6.0", python = "^3.8" }
